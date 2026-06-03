@@ -1,5 +1,4 @@
-use meowlman_address::Mailbox;
-use meowlman_smtp::SmtpClient;
+use meowlman::{Mailbox, SmtpClient};
 
 fn main() {
     let mut client = SmtpClient::connect("localhost:2525").expect("connect");
