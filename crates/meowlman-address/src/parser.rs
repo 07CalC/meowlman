@@ -5,6 +5,14 @@ use crate::{
     lexer::Token,
 };
 
+fn mailbox_from_parts(display_name: Option<String>, addr_spec: AddrSpec) -> Mailbox {
+    Mailbox {
+        display_name,
+        local_part: addr_spec.local_part_string(),
+        domain: addr_spec.domain_string(),
+    }
+}
+
 pub struct Parser {
     tokens: Vec<Token>,
     pos: usize,
@@ -39,8 +47,6 @@ impl Parser {
         }
     }
 
-    /// Check if a `<` token appears before any `@` or end-of-input.
-    /// Used to disambiguate display-name + angle-addr vs bare addr-spec.
     fn has_angle_before_at(&self) -> bool {
         let mut i = self.pos;
         while i < self.tokens.len() {
@@ -75,9 +81,7 @@ impl Parser {
             }
         }
         if parts.is_empty() {
-            return Err(ParseError::InvalidDisplayName(
-                "empty display name".into(),
-            ));
+            return Err(ParseError::InvalidDisplayName("empty display name".into()));
         }
         Ok(parts.join(" "))
     }
@@ -108,7 +112,6 @@ impl Parser {
     }
 
     fn parse_domain(&mut self) -> Result<Domain, ParseError> {
-        // Domain literal: [1.2.3.4] or [IPv6:...]
         if matches!(self.peek(), Token::LBracket) {
             return self.parse_domain_literal();
         }
@@ -180,43 +183,28 @@ impl Parser {
 
     pub fn parse_mailbox(&mut self) -> Result<Mailbox, ParseError> {
         if matches!(self.peek(), Token::LessThan) {
-            // `<addr-spec>` — no display name
             self.expect(&Token::LessThan)?;
             let addr_spec = self.parse_addr_spec()?;
             self.expect(&Token::GreaterThan)?;
             self.expect(&Token::End)?;
-            return Ok(Mailbox {
-                display_name: None,
-                addr_spec,
-            });
+            return Ok(mailbox_from_parts(None, addr_spec));
         }
 
         if matches!(self.peek(), Token::End) {
-            return Err(ParseError::InvalidDisplayName(
-                "empty input".into(),
-            ));
+            return Err(ParseError::InvalidDisplayName("empty input".into()));
         }
 
-        // Could be "display-name <addr-spec>" or bare "addr-spec"
         if self.has_angle_before_at() {
-            // display-name <addr-spec>
             let display_name = Some(self.parse_display_name()?);
             self.expect(&Token::LessThan)?;
             let addr_spec = self.parse_addr_spec()?;
             self.expect(&Token::GreaterThan)?;
             self.expect(&Token::End)?;
-            Ok(Mailbox {
-                display_name,
-                addr_spec,
-            })
+            Ok(mailbox_from_parts(display_name, addr_spec))
         } else {
-            // bare addr-spec: user@domain
             let addr_spec = self.parse_addr_spec()?;
             self.expect(&Token::End)?;
-            Ok(Mailbox {
-                display_name: None,
-                addr_spec,
-            })
+            Ok(mailbox_from_parts(None, addr_spec))
         }
     }
 
