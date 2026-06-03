@@ -1,8 +1,9 @@
+use crate::error::ParseError;
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Token {
     Atom(String),
     QuotedString(String),
-    Comment(String),
     At,          // @
     Dot,         // .
     Comma,       // ,
@@ -10,8 +11,6 @@ pub enum Token {
     Semicolon,   // ;
     LessThan,    // <
     GreaterThan, // >
-    LParen,      // (
-    RParen,      // )
     LBracket,    // [
     RBracket,    // ]
     End,
@@ -27,7 +26,7 @@ impl<'a> Lexer<'a> {
         Self { input, pos: 0 }
     }
 
-    pub fn tokenize(&mut self) -> Result<Vec<Token>, String> {
+    pub fn tokenize(&mut self) -> Result<Vec<Token>, ParseError> {
         let mut tokens = Vec::new();
         while !self.eof() {
             let token = self.next_token()?;
@@ -38,6 +37,7 @@ impl<'a> Lexer<'a> {
         }
         Ok(tokens)
     }
+
     fn peek(&self) -> Option<char> {
         self.input[self.pos..].chars().next()
     }
@@ -47,6 +47,7 @@ impl<'a> Lexer<'a> {
         self.pos += ch.len_utf8();
         Some(ch)
     }
+
     fn eof(&self) -> bool {
         self.pos >= self.input.len()
     }
@@ -63,20 +64,23 @@ impl<'a> Lexer<'a> {
         self.input[start..self.pos].to_string()
     }
 
-    fn skip_wsp(&mut self) {
+    fn skip_wsp(&mut self) -> Result<(), ParseError> {
         while let Some(ch) = self.peek() {
             if ch.is_whitespace() {
                 self.bump();
             } else if ch == '(' {
-                self.eat_comment();
+                // comments are consumed and discarded during whitespace skipping
+                // so they don't appear as tokens in the token stream
+                self.eat_comment()?;
             } else {
                 break;
             }
         }
+        Ok(())
     }
 
-    fn next_token(&mut self) -> Result<Token, String> {
-        self.skip_wsp();
+    fn next_token(&mut self) -> Result<Token, ParseError> {
+        self.skip_wsp()?;
         let Some(ch) = self.peek() else {
             return Ok(Token::End);
         };
@@ -88,11 +92,6 @@ impl<'a> Lexer<'a> {
             ';' => Token::Semicolon,
             '<' => Token::LessThan,
             '>' => Token::GreaterThan,
-            '(' => {
-                let comment = self.eat_comment()?;
-                return Ok(Token::Comment(comment));
-            }
-            ')' => Token::RParen,
             '[' => Token::LBracket,
             ']' => Token::RBracket,
             '"' => {
@@ -103,39 +102,43 @@ impl<'a> Lexer<'a> {
                 let atom = self.consume_atom();
                 return Ok(Token::Atom(atom));
             }
-            _ => return Err(format!("unexpected character: {}", ch)),
+            _ => return Err(ParseError::InvalidCharacter(ch)),
         };
         self.bump();
         Ok(token)
     }
-    fn consume_quoted_string(&mut self) -> Result<String, String> {
+
+    fn consume_quoted_string(&mut self) -> Result<String, ParseError> {
         let quote = self.bump();
         if quote != Some('"') {
-            return Err("expected '\"'".to_string());
+            return Err(ParseError::InvalidCharacter('"'));
         }
         let mut out = String::new();
-        while let Some(ch) = self.peek() {
-            match ch {
-                '"' => {
+        loop {
+            match self.peek() {
+                None => return Err(ParseError::UnterminatedQuotedString),
+                Some('"') => {
                     self.bump();
                     return Ok(out);
                 }
-                '\\' => {
-                    let escaped = self.bump().ok_or("unterminated quoted string")?;
-                    out.push(escaped);
+                Some('\\') => {
+                    self.bump(); // skip backslash
+                    match self.bump() {
+                        Some(c) => out.push(c),
+                        None => return Err(ParseError::UnterminatedQuotedString),
+                    }
                 }
-                _ => {
+                Some(ch) => {
                     out.push(ch);
                     self.bump();
                 }
             }
         }
-        Err("unterminated quoted string".to_string())
     }
 
-    fn eat_comment(&mut self) -> Result<String, String> {
+    fn eat_comment(&mut self) -> Result<String, ParseError> {
         if self.bump() != Some('(') {
-            return Err("expected '('".to_string());
+            return Err(ParseError::InvalidCharacter('('));
         }
         let mut out = String::new();
         let mut depth = 1;
@@ -149,17 +152,17 @@ impl<'a> Lexer<'a> {
                     }
                 }
                 '\\' => {
-                    self.bump().ok_or("unterminated quoted string")?;
+                    self.bump().ok_or(ParseError::UnterminatedComment)?;
                 }
                 _ => out.push(ch),
             }
         }
-        Err("unterminated Comment".into())
+        Err(ParseError::UnterminatedComment)
     }
 
     /// ref: https://datatracker.ietf.org/doc/html/rfc5322#section-3.2.3
     ///
-    ///   atext         =   ALPHA / DIGIT /    ; Printable US-ASCII
+    ///   atext        =   ALPHA / DIGIT /    ; Printable US-ASCII
     ///                "!" / "#" /        ;  characters not including
     ///                "$" / "%" /        ;  specials.  Used for atoms.
     ///                "&" / "'" /
