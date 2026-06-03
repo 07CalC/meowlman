@@ -33,6 +33,10 @@ impl Mailbox {
         parser.parse_mailbox()
     }
 
+    /// returns the email address in the form `local_part@domain`.
+    /// this does not include the display name or angle brackets.
+    /// for example, for `John Doe <john.doe@mail.com>`
+    /// this will return `john.doe@mail.com`.
     pub fn address(&self) -> String {
         format!("{}@{}", self.local_part, self.domain)
     }

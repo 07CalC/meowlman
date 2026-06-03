@@ -7,12 +7,21 @@ name = "meowlman"
 version = "0.1.0"
 dependencies = [
  "meowlman-address",
+ "meowlman-smtp",
 ]
 
 [[package]]
 name = "meowlman-address"
 version = "0.1.0"
 dependencies = [
+ "thiserror",
+]
+
+[[package]]
+name = "meowlman-smtp"
+version = "0.1.0"
+dependencies = [
+ "meowlman-address",
  "thiserror",
 ]
 

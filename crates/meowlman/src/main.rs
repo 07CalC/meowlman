@@ -1,22 +1,22 @@
+use meowlman_address::Mailbox;
+use meowlman_smtp::SmtpClient;
+
 fn main() {
-    // Parse from string
-    let mb = meowlman_address::Mailbox::from_str("John Doe <john.doe@gmail.com>").unwrap();
-    println!("parsed:  {mb}");
-    println!("  display_name: {:?}", mb.display_name);
-    println!("  local_part:   {:?}", mb.local_part);
-    println!("  domain:       {:?}", mb.domain);
+    let mut client = SmtpClient::connect("localhost:2525").expect("connect");
+    let resp = client.helo("example.com").expect("EHLO");
+    println!("EHLO: {} {:?}", resp.code, resp.lines);
 
-    // Construct from parts
-    let mb = meowlman_address::Mailbox::new(Some("Jane Doe".into()), "jane.doe", "example.com");
-    println!("built:   {mb}");
-    println!("  display_name: {:?}", mb.display_name);
-    println!("  local_part:   {:?}", mb.local_part);
-    println!("  domain:       {:?}", mb.domain);
+    let mailbox = Mailbox::from_str("vinayak <hello@vinm.me>").unwrap();
+    let resp = client.mail_from(mailbox).expect("MAIL FROM");
+    println!("MAIL FROM: {} {:?}", resp.code, resp.lines);
 
-    // Bare address
-    let mb = meowlman_address::Mailbox::new(None, "robot", "service.org");
-    println!("bare:    {mb}");
-    println!("  display_name: {:?}", mb.display_name);
-    println!("  local_part:   {:?}", mb.local_part);
-    println!("  domain:       {:?}", mb.domain);
+    let resp = client
+        .rcpt_to(Mailbox::from_str("calc <calc@trymist.cloud>").unwrap())
+        .expect("RCPT TO");
+    println!("RCPT TO: {} {:?}", resp.code, resp.lines);
+
+    match client.data("Subject: Test\r\n\r\nThis is a test email.") {
+        Ok(resp) => println!("DATA: {} {:?}", resp.code, resp.lines),
+        Err(e) => eprintln!("DATA failed: {e}"),
+    }
 }
