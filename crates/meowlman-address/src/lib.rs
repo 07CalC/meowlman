@@ -10,7 +10,7 @@ mod parser;
 pub use ast::{AddrSpec, Domain, LocalPart, LocalPartPart};
 pub use error::ParseError;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Mailbox {
     pub display_name: Option<String>,
     pub local_part: String,

@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 meowlman-address = { path = "../meowlman-address" }
 meowlman-smtp = { path = "../meowlman-smtp" }
+meowlman-message = { path = "../meowlman-message" }

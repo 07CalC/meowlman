@@ -1,0 +1,9 @@
+[package]
+name = "meowlman-message"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+thiserror.workspace = true
+meowlman-address = { path = "../meowlman-address" }
+chrono = "0.4.45"
