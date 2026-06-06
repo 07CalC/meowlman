@@ -94,3 +94,32 @@ impl MessageFormatter {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_message() {
+        let message = Message::new("something@email.com".parse().unwrap())
+            .to("somethingelse@email.com".parse().unwrap())
+            .subject("Test Email")
+            .body_text("This is a test email.");
+        let formatted = MessageFormatter::format(&message);
+        assert!(formatted.contains("From: something@email.com"));
+        assert!(formatted.contains("To: somethingelse@email.com"));
+        assert!(formatted.contains("Subject: Test Email"));
+        assert!(formatted.contains("This is a test email."));
+    }
+
+    #[test]
+    fn test_format_message_with_custom_headers() {
+        let message = Message::new("something@email.com".parse().unwrap())
+            .to("somethingelse@email.com".parse().unwrap())
+            .subject("Test Email")
+            .body_text("This is a test email.")
+            .header("X-Custom-Header", "Custom Value");
+        let formatted = MessageFormatter::format(&message);
+        assert!(formatted.contains("X-Custom-Header: Custom Value"));
+    }
+}
