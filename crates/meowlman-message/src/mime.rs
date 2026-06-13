@@ -1,5 +1,6 @@
 use base64::{Engine, engine};
 
+#[derive(Debug)]
 pub enum MimeNode {
     Part(MimePart),
     Multipart {
@@ -8,12 +9,14 @@ pub enum MimeNode {
     },
 }
 
+#[derive(Debug)]
 pub enum MultipartKind {
     Mixed,
     Alternative,
     Related,
 }
 
+#[derive(Debug)]
 pub struct MimePart {
     pub content_type: String,
     pub content_transfer_encoding: Encoding,
@@ -22,6 +25,7 @@ pub struct MimePart {
     pub headers: Vec<(String, String)>,
 }
 
+#[derive(Debug)]
 pub enum Encoding {
     SevenBit,
     EightBit,
@@ -68,6 +72,7 @@ impl MimeNode {
                     _ => String::from_utf8_lossy(&part.content).to_string(),
                 };
                 result.push_str(&content_str);
+                result.push_str("\r\n");
                 result
             }
             MimeNode::Multipart { kind, parts } => {
@@ -85,7 +90,9 @@ impl MimeNode {
                 for part in parts {
                     result.push_str(&format!("--{}\r\n", boundary));
                     result.push_str(&part.build());
-                    result.push_str("\r\n");
+                    if !result.ends_with("\r\n") {
+                        result.push_str("\r\n");
+                    }
                 }
                 result.push_str(&format!("--{}--\r\n", boundary));
                 result
@@ -97,7 +104,7 @@ impl MimeNode {
 impl MimePart {
     pub fn new_text(content: &str) -> Self {
         MimePart {
-            content_type: "text/plain; charset=utf-8".to_string(),
+            content_type: "text/plain; charset=\"UTF-8\"".to_string(),
             content_transfer_encoding: Encoding::QuotedPrintable,
             content_disposition: None,
             content: content.as_bytes().to_vec(),
@@ -106,7 +113,7 @@ impl MimePart {
     }
     pub fn new_html(content: &str) -> Self {
         MimePart {
-            content_type: "text/html; charset=utf-8".to_string(),
+            content_type: "text/html; charset=\"UTF-8\"".to_string(),
             content_transfer_encoding: Encoding::QuotedPrintable,
             content_disposition: None,
             content: content.as_bytes().to_vec(),

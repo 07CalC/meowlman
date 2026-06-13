@@ -88,12 +88,13 @@ impl MessageFormatter {
         //TODO: handle multipart messages with both text and html bodies, for now just include one
         //or the other if present
         let body_node = Self::build_tree(message);
+        println!("Built MIME tree: {:#?}", body_node);
         result.push_str(&body_node.build());
         result
     }
 
     fn build_tree(message: &Message) -> MimeNode {
-        let mut content = match (
+        let content = match (
             &message.body_text,
             &message.body_html,
             &message.attachments.len(),
@@ -109,11 +110,19 @@ impl MessageFormatter {
             },
             _ => {
                 let mut parts = Vec::new();
-                if let Some(ref text) = message.body_text {
-                    parts.push(MimeNode::Part(MimePart::new_text(text)));
-                }
-                if let Some(ref html) = message.body_html {
-                    parts.push(MimeNode::Part(MimePart::new_html(html)));
+                match (&message.body_text, &message.body_html) {
+                    (Some(text), None) => parts.push(MimeNode::Part(MimePart::new_text(text))),
+                    (None, Some(html)) => parts.push(MimeNode::Part(MimePart::new_html(html))),
+                    (Some(text), Some(html)) => {
+                        parts.push(MimeNode::Multipart {
+                            kind: MultipartKind::Alternative,
+                            parts: vec![
+                                MimeNode::Part(MimePart::new_text(text)),
+                                MimeNode::Part(MimePart::new_html(html)),
+                            ],
+                        });
+                    }
+                    (None, None) => {}
                 }
                 for attachment in &message.attachments {
                     parts.push(MimeNode::Part(MimePart::new_attachment(
@@ -167,7 +176,7 @@ mod tests {
             .subject("Test Email with HTML")
             .body_html("<h1>This is a test email.</h1>");
         let formatted = MessageFormatter::format(&message);
-        assert!(formatted.contains("Content-Type: text/html; charset=utf-8"));
+        assert!(formatted.contains("Content-Type: text/html; charset=\"UTF-8\""));
         assert!(formatted.contains("<h1>This is a test email.</h1>"));
     }
 
@@ -180,8 +189,8 @@ mod tests {
             .body_html("<h1>This is the HTML body.</h1>");
         let formatted = MessageFormatter::format(&message);
         assert!(formatted.contains("Content-Type: multipart/alternative"));
-        assert!(formatted.contains("Content-Type: text/plain; charset=utf-8"));
-        assert!(formatted.contains("Content-Type: text/html; charset=utf-8"));
+        assert!(formatted.contains("Content-Type: text/plain; charset=\"UTF-8\""));
+        assert!(formatted.contains("Content-Type: text/html; charset=\"UTF-8\""));
         assert!(formatted.contains("This is the plain text body."));
         assert!(formatted.contains("<h1>This is the HTML body.</h1>"));
     }
