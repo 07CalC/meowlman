@@ -1,10 +1,13 @@
 use meowlman_address::Mailbox;
+mod attachments;
 mod header;
 mod mime;
 
 mod serialise;
 
 pub use serialise::MessageFormatter;
+
+use crate::attachments::Attachment;
 
 /// ref: https://datatracker.ietf.org/doc/html/rfc5322#section-3.6
 //  +----------------+--------+------------+----------------------------+
@@ -61,6 +64,7 @@ pub struct Message {
     pub body_html: Option<String>,
     pub message_id: Option<String>,
     pub headers: Vec<(String, String)>,
+    pub attachments: Vec<Attachment>,
 }
 
 impl Message {
@@ -80,6 +84,7 @@ impl Message {
             body_html: None,
             message_id: None,
             headers: Vec::new(),
+            attachments: Vec::new(),
         }
     }
     pub fn sender(mut self, sender: Mailbox) -> Self {
@@ -136,6 +141,11 @@ impl Message {
     }
     pub fn body_html(mut self, body_html: &str) -> Self {
         self.body_html = Some(body_html.to_string());
+        self
+    }
+
+    pub fn attachment(mut self, attachment: Attachment) -> Self {
+        self.attachments.push(attachment);
         self
     }
 

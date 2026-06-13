@@ -92,47 +92,59 @@ impl MessageFormatter {
     }
 
     fn build_tree(message: &Message) -> MimeNode {
-        let mut content = match (&message.body_text, &message.body_html) {
-            (Some(text), Some(html)) => MimeNode::Multipart {
-                kind: MultipartKind::Alternative,
-                parts: vec![
-                    MimeNode::Part(MimePart {
-                        content_type: "text/plain; charset=utf-8".to_string(),
-                        content_transfer_encoding: Encoding::QuotedPrintable,
-                        content_disposition: None,
-                        content: text.as_bytes().to_vec(),
-                        headers: Vec::new(),
-                    }),
-                    MimeNode::Part(MimePart {
-                        content_type: "text/html; charset=utf-8".to_string(),
-                        content_transfer_encoding: Encoding::QuotedPrintable,
-                        content_disposition: None,
-                        content: html.as_bytes().to_vec(),
-                        headers: Vec::new(),
-                    }),
-                ],
-            },
-            (Some(text), None) => MimeNode::Part(MimePart {
+        let content = match (&message.body_text, &message.body_html, &message.attachments) {
+            (Some(text), None, attachments) if attachments.is_empty() => MimeNode::Part(MimePart {
                 content_type: "text/plain; charset=utf-8".to_string(),
                 content_transfer_encoding: Encoding::QuotedPrintable,
                 content_disposition: None,
                 content: text.as_bytes().to_vec(),
-                headers: Vec::new(),
+                headers: vec![],
             }),
-            (None, Some(html)) => MimeNode::Part(MimePart {
+            (None, Some(html), attachments) if attachments.is_empty() => MimeNode::Part(MimePart {
                 content_type: "text/html; charset=utf-8".to_string(),
                 content_transfer_encoding: Encoding::QuotedPrintable,
                 content_disposition: None,
                 content: html.as_bytes().to_vec(),
-                headers: Vec::new(),
+                headers: vec![],
             }),
-            (None, None) => MimeNode::Part(MimePart {
-                content_type: "text/plain; charset=utf-8".to_string(),
-                content_transfer_encoding: Encoding::QuotedPrintable,
-                content_disposition: None,
-                content: Vec::new(),
-                headers: Vec::new(),
-            }),
+            (body_text, body_html, attachments) => {
+                let mut parts = Vec::new();
+                if let Some(text) = body_text {
+                    parts.push(MimeNode::Part(MimePart {
+                        content_type: "text/plain; charset=utf-8".to_string(),
+                        content_transfer_encoding: Encoding::QuotedPrintable,
+                        content_disposition: None,
+                        content: text.as_bytes().to_vec(),
+                        headers: vec![],
+                    }));
+                }
+                if let Some(html) = body_html {
+                    parts.push(MimeNode::Part(MimePart {
+                        content_type: "text/html; charset=utf-8".to_string(),
+                        content_transfer_encoding: Encoding::QuotedPrintable,
+                        content_disposition: None,
+                        content: html.as_bytes().to_vec(),
+                        headers: vec![],
+                    }));
+                }
+                for attachment in attachments {
+                    parts.push(MimeNode::Part(MimePart {
+                        content_type: attachment.content_type.clone(),
+                        content_transfer_encoding: Encoding::Base64,
+                        content_disposition: Some(format!(
+                            "attachment; filename=\"{}\"",
+                            attachment.filename
+                        )),
+                        content: attachment.content.clone(),
+                        headers: vec![],
+                    }));
+                }
+
+                MimeNode::Multipart {
+                    kind: MultipartKind::Alternative,
+                    parts,
+                }
+            }
         };
         return content;
     }
