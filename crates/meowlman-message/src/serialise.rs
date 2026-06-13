@@ -9,6 +9,7 @@ pub struct MessageFormatter {}
 impl MessageFormatter {
     pub fn format(message: &Message) -> String {
         let mut header_writer = HeaderWriter::new();
+        header_writer.header("MIME-Version", "1.0");
         header_writer.header(
             "From",
             &message
@@ -74,7 +75,7 @@ impl MessageFormatter {
             let generated_id = format!(
                 "<{}@{}>",
                 chrono::Utc::now().timestamp_millis(),
-                message.from[0].address()
+                message.from[0].domain
             );
             header_writer.header("Message-ID", &generated_id);
         }
@@ -83,7 +84,7 @@ impl MessageFormatter {
         }
 
         let mut result = header_writer.build();
-        result.push_str("\r\n");
+        // result.push_str("\r\n");
         //TODO: handle multipart messages with both text and html bodies, for now just include one
         //or the other if present
         let body_node = Self::build_tree(message);

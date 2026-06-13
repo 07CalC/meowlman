@@ -5,6 +5,7 @@ use std::{
 };
 
 use meowlman_address::Mailbox;
+use meowlman_message::Message;
 
 use crate::error::SmtpClientError;
 
@@ -120,7 +121,7 @@ impl SmtpClient {
     }
 
     /// ref: https://datatracker.ietf.org/doc/html/rfc5321#section-4.1.1.4
-    pub fn data(&mut self, body: &str) -> Result<Response, SmtpClientError> {
+    pub fn data_raw(&mut self, body: &str) -> Result<Response, SmtpClientError> {
         let resp = self.command("DATA")?;
         resp.check(354)?;
 
@@ -131,6 +132,11 @@ impl SmtpClient {
 
         let resp = self.read_response()?;
         resp.check_2xx()?;
+        Ok(resp)
+    }
+
+    pub fn send(&mut self, msg: &Message) -> Result<Response, SmtpClientError> {
+        let resp = self.data_raw(&msg.build())?;
         Ok(resp)
     }
 

@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 thiserror.workspace = true
 meowlman-address = { path = "../meowlman-address" }
+meowlman-message = { path = "../meowlman-message" }
