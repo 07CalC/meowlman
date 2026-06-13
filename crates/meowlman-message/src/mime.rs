@@ -93,3 +93,34 @@ impl MimeNode {
         }
     }
 }
+
+impl MimePart {
+    pub fn new_text(content: &str) -> Self {
+        MimePart {
+            content_type: "text/plain; charset=utf-8".to_string(),
+            content_transfer_encoding: Encoding::QuotedPrintable,
+            content_disposition: None,
+            content: content.as_bytes().to_vec(),
+            headers: vec![],
+        }
+    }
+    pub fn new_html(content: &str) -> Self {
+        MimePart {
+            content_type: "text/html; charset=utf-8".to_string(),
+            content_transfer_encoding: Encoding::QuotedPrintable,
+            content_disposition: None,
+            content: content.as_bytes().to_vec(),
+            headers: vec![],
+        }
+    }
+
+    pub fn new_attachment(filename: &str, content_type: &str, content: Vec<u8>) -> Self {
+        MimePart {
+            content_type: content_type.to_string(),
+            content_transfer_encoding: Encoding::Base64,
+            content_disposition: Some(format!("attachment; filename=\"{}\"", filename)),
+            content,
+            headers: vec![],
+        }
+    }
+}

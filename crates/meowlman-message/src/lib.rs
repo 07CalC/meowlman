@@ -7,7 +7,7 @@ mod serialise;
 
 pub use serialise::MessageFormatter;
 
-use crate::attachments::Attachment;
+pub use crate::attachments::Attachment;
 
 /// ref: https://datatracker.ietf.org/doc/html/rfc5322#section-3.6
 //  +----------------+--------+------------+----------------------------+

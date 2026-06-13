@@ -92,56 +92,37 @@ impl MessageFormatter {
     }
 
     fn build_tree(message: &Message) -> MimeNode {
-        let content = match (&message.body_text, &message.body_html, &message.attachments) {
-            (Some(text), None, attachments) if attachments.is_empty() => MimeNode::Part(MimePart {
-                content_type: "text/plain; charset=utf-8".to_string(),
-                content_transfer_encoding: Encoding::QuotedPrintable,
-                content_disposition: None,
-                content: text.as_bytes().to_vec(),
-                headers: vec![],
-            }),
-            (None, Some(html), attachments) if attachments.is_empty() => MimeNode::Part(MimePart {
-                content_type: "text/html; charset=utf-8".to_string(),
-                content_transfer_encoding: Encoding::QuotedPrintable,
-                content_disposition: None,
-                content: html.as_bytes().to_vec(),
-                headers: vec![],
-            }),
-            (body_text, body_html, attachments) => {
+        let mut content = match (
+            &message.body_text,
+            &message.body_html,
+            &message.attachments.len(),
+        ) {
+            (Some(text), None, 0) => MimeNode::Part(MimePart::new_text(text)),
+            (None, Some(html), 0) => MimeNode::Part(MimePart::new_html(html)),
+            (Some(text), Some(html), 0) => MimeNode::Multipart {
+                kind: MultipartKind::Alternative,
+                parts: vec![
+                    MimeNode::Part(MimePart::new_text(text)),
+                    MimeNode::Part(MimePart::new_html(html)),
+                ],
+            },
+            _ => {
                 let mut parts = Vec::new();
-                if let Some(text) = body_text {
-                    parts.push(MimeNode::Part(MimePart {
-                        content_type: "text/plain; charset=utf-8".to_string(),
-                        content_transfer_encoding: Encoding::QuotedPrintable,
-                        content_disposition: None,
-                        content: text.as_bytes().to_vec(),
-                        headers: vec![],
-                    }));
+                if let Some(ref text) = message.body_text {
+                    parts.push(MimeNode::Part(MimePart::new_text(text)));
                 }
-                if let Some(html) = body_html {
-                    parts.push(MimeNode::Part(MimePart {
-                        content_type: "text/html; charset=utf-8".to_string(),
-                        content_transfer_encoding: Encoding::QuotedPrintable,
-                        content_disposition: None,
-                        content: html.as_bytes().to_vec(),
-                        headers: vec![],
-                    }));
+                if let Some(ref html) = message.body_html {
+                    parts.push(MimeNode::Part(MimePart::new_html(html)));
                 }
-                for attachment in attachments {
-                    parts.push(MimeNode::Part(MimePart {
-                        content_type: attachment.content_type.clone(),
-                        content_transfer_encoding: Encoding::Base64,
-                        content_disposition: Some(format!(
-                            "attachment; filename=\"{}\"",
-                            attachment.filename
-                        )),
-                        content: attachment.content.clone(),
-                        headers: vec![],
-                    }));
+                for attachment in &message.attachments {
+                    parts.push(MimeNode::Part(MimePart::new_attachment(
+                        &attachment.filename,
+                        &attachment.content_type,
+                        attachment.content.clone(),
+                    )));
                 }
-
                 MimeNode::Multipart {
-                    kind: MultipartKind::Alternative,
+                    kind: MultipartKind::Mixed,
                     parts,
                 }
             }
