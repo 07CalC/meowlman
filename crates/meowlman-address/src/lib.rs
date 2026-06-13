@@ -26,6 +26,8 @@ impl Mailbox {
         }
     }
 
+    /// Parses an email address from a string.
+    /// The input can be in the form of `local_part@domain` or `Display Name <local_part@domain>`.
     pub fn from_str(address: &str) -> Result<Self, ParseError> {
         let mut lexer = lexer::Lexer::new(address);
         let tokens = lexer.tokenize()?;
@@ -51,6 +53,8 @@ impl FromStr for Mailbox {
 }
 
 impl std::fmt::Display for Mailbox {
+    /// formats the mailbox as `Display Name <local_part@domain>` if a display name is present,
+    /// otherwise just `local_part@domain`.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(ref name) = self.display_name {
             write!(f, "{} <{}>", name, self.address())

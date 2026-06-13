@@ -7,3 +7,5 @@ edition = "2024"
 thiserror.workspace = true
 meowlman-address = { path = "../meowlman-address" }
 chrono = "0.4.45"
+quoted_printable = "0.5.2"
+base64 = "0.22.1"

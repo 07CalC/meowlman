@@ -1,5 +1,6 @@
 use meowlman_address::Mailbox;
 mod header;
+mod mime;
 
 mod serialise;
 
@@ -43,6 +44,8 @@ pub use serialise::MessageFormatter;
 // | keywords       | 0      | unlimited  |                            |
 // | optional-field | 0      | unlimited  |                            |
 // +----------------+--------+------------+----------------------------+
+
+//TODO: add support for attachments and multipart messags
 pub struct Message {
     pub from: Vec<Mailbox>,
     pub sender: Option<Mailbox>,
@@ -141,21 +144,7 @@ impl Message {
         self
     }
 
-    // pub fn body_text(&mut self, body_text: &str) -> &mut Self {
-    //     self.body_text = Some(body_text.to_string());
-    //     self
-    // }
-    // pub fn body_html(&mut self, body_html: &str) -> &mut Self {
-    //     self.body_html = Some(body_html.to_string());
-    //     self
-    // }
-    //
-    // pub fn message_id(&mut self, message_id: &str) -> &mut Self {
-    //     self.message_id = Some(message_id.to_string());
-    //     self
-    // }
-    // pub fn header(&mut self, key: &str, value: &str) -> &mut Self {
-    //     self.headers.push((key.to_string(), value.to_string()));
-    //     self
-    // }
+    pub fn build(&self) -> String {
+        MessageFormatter::format(&self)
+    }
 }

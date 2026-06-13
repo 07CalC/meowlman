@@ -1,14 +1,12 @@
-use std::hash::{BuildHasher, Hasher, RandomState};
-
-use crate::{Message, header::HeaderWriter};
+use crate::{
+    Message,
+    header::HeaderWriter,
+    mime::{Encoding, MimeNode, MimePart, MultipartKind},
+};
 
 pub struct MessageFormatter {}
 
 impl MessageFormatter {
-    pub fn new() -> Self {
-        Self {}
-    }
-
     pub fn format(message: &Message) -> String {
         let mut header_writer = HeaderWriter::new();
         header_writer.header(
@@ -86,12 +84,57 @@ impl MessageFormatter {
 
         let mut result = header_writer.build();
         result.push_str("\r\n");
-        if let Some(ref body_text) = message.body_text {
-            result.push_str(body_text);
-        } else if let Some(ref body_html) = message.body_html {
-            result.push_str(body_html);
-        }
+        //TODO: handle multipart messages with both text and html bodies, for now just include one
+        //or the other if present
+        let body_node = Self::build_tree(message);
+        result.push_str(&body_node.build());
         result
+    }
+
+    fn build_tree(message: &Message) -> MimeNode {
+        let mut content = match (&message.body_text, &message.body_html) {
+            (Some(text), Some(html)) => MimeNode::Multipart {
+                kind: MultipartKind::Alternative,
+                parts: vec![
+                    MimeNode::Part(MimePart {
+                        content_type: "text/plain; charset=utf-8".to_string(),
+                        content_transfer_encoding: Encoding::QuotedPrintable,
+                        content_disposition: None,
+                        content: text.as_bytes().to_vec(),
+                        headers: Vec::new(),
+                    }),
+                    MimeNode::Part(MimePart {
+                        content_type: "text/html; charset=utf-8".to_string(),
+                        content_transfer_encoding: Encoding::QuotedPrintable,
+                        content_disposition: None,
+                        content: html.as_bytes().to_vec(),
+                        headers: Vec::new(),
+                    }),
+                ],
+            },
+            (Some(text), None) => MimeNode::Part(MimePart {
+                content_type: "text/plain; charset=utf-8".to_string(),
+                content_transfer_encoding: Encoding::QuotedPrintable,
+                content_disposition: None,
+                content: text.as_bytes().to_vec(),
+                headers: Vec::new(),
+            }),
+            (None, Some(html)) => MimeNode::Part(MimePart {
+                content_type: "text/html; charset=utf-8".to_string(),
+                content_transfer_encoding: Encoding::QuotedPrintable,
+                content_disposition: None,
+                content: html.as_bytes().to_vec(),
+                headers: Vec::new(),
+            }),
+            (None, None) => MimeNode::Part(MimePart {
+                content_type: "text/plain; charset=utf-8".to_string(),
+                content_transfer_encoding: Encoding::QuotedPrintable,
+                content_disposition: None,
+                content: Vec::new(),
+                headers: Vec::new(),
+            }),
+        };
+        return content;
     }
 }
 
@@ -121,5 +164,31 @@ mod tests {
             .header("X-Custom-Header", "Custom Value");
         let formatted = MessageFormatter::format(&message);
         assert!(formatted.contains("X-Custom-Header: Custom Value"));
+    }
+
+    #[test]
+    fn test_format_message_with_html_body() {
+        let message = Message::new("vinayak <hello@vinm.me>".parse().unwrap())
+            .to("calc <hello@calc.me>".parse().unwrap())
+            .subject("Test Email with HTML")
+            .body_html("<h1>This is a test email.</h1>");
+        let formatted = MessageFormatter::format(&message);
+        assert!(formatted.contains("Content-Type: text/html; charset=utf-8"));
+        assert!(formatted.contains("<h1>This is a test email.</h1>"));
+    }
+
+    #[test]
+    fn test_format_message_with_both_bodies() {
+        let message = Message::new("vinayak <hello@vinm.me>".parse().unwrap())
+            .to("calc <hello@calc.me>".parse().unwrap())
+            .subject("Test Email with Both Bodies")
+            .body_text("This is the plain text body.")
+            .body_html("<h1>This is the HTML body.</h1>");
+        let formatted = MessageFormatter::format(&message);
+        assert!(formatted.contains("Content-Type: multipart/alternative"));
+        assert!(formatted.contains("Content-Type: text/plain; charset=utf-8"));
+        assert!(formatted.contains("Content-Type: text/html; charset=utf-8"));
+        assert!(formatted.contains("This is the plain text body."));
+        assert!(formatted.contains("<h1>This is the HTML body.</h1>"));
     }
 }
