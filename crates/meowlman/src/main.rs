@@ -6,15 +6,9 @@ fn main() {
         .subject("hi")
         .body_text("hi")
         .body_html("<h1>hi</h1>")
-        .attachment(Attachment::from_file("hi.txt", "text/plain").unwrap());
-    // .attachment(Attachment::from_file("resume-v1.5.pdf", "application/pdf").unwrap());
-
-    let formatted_message = meowlman_message::MessageFormatter::format(&message);
-    for b in formatted_message.as_bytes() {
-        print!("{:02X} ", b);
-    }
+        .attachment(Attachment::from_file("hi.txt", "text/plain").unwrap())
+        .attachment(Attachment::from_file("resume-v1.5.pdf", "application/pdf").unwrap());
     let mut client = meowlman_smtp::SmtpClient::connect("localhost:1025").unwrap();
-
     let mut res = client.helo("localhost").unwrap();
     println!("HELO response: {:?}", res);
     res = client.mail_from("hello@vinm.me".parse().unwrap()).unwrap();

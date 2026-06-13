@@ -88,7 +88,7 @@ impl MessageFormatter {
         //TODO: handle multipart messages with both text and html bodies, for now just include one
         //or the other if present
         let body_node = Self::build_tree(message);
-        println!("Built MIME tree: {:#?}", body_node);
+        // println!("Built MIME tree: {:#?}", body_node);
         result.push_str(&body_node.build());
         result
     }
