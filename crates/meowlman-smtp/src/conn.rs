@@ -64,7 +64,12 @@ impl SmtpConnection {
     pub async fn handle(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.write_response(220, &format!("{} SMTP Service Ready", self.helo_name))
             .await?;
-        // self.ip = Some(self.stream.get_ref().peer_addr()?.ip().to_string());
+        self.ip = match self.stream {
+            SmtpStream::Plain(ref reader) => Some(reader.get_ref().peer_addr()?.ip().to_string()),
+            // TODO: extract IP from TLS stream
+            SmtpStream::Tls(_) => None,
+            SmtpStream::Placeholder => None,
+        };
         loop {
             let line: String = self.read_line().await?;
             if line.is_empty() {
@@ -253,11 +258,9 @@ impl SmtpConnection {
     }
 
     async fn handle_reset(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.smtp_helo = None;
         self.mail_from = None;
         self.rcpt_to.clear();
         self.message_data = None;
-        self.helo_seen = false;
         self.mail_seen = false;
         self.rcpt_seen = false;
         self.write_response(250, "OK").await?;
