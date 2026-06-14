@@ -1,12 +1,18 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
+use std::{
+    fs::File,
+    io::BufReader,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
-use crate::{
-    conn::{SmtpConnection, TlsMode},
-    message_handler::MessageHandler,
+use tokio_rustls::{
+    TlsAcceptor,
+    rustls::{self, PrivateKey},
 };
+
+use crate::{conn::SmtpConnection, message_handler::MessageHandler};
 
 const DEFAULT_HELO_NAME: &str = "meowlman-smtp";
 const DEFAULT_MAX_MESSAGE_SIZE: usize = 10 * 1024 * 1024;
@@ -18,8 +24,7 @@ pub struct SmtpServer {
     pub port: u16,
     pub helo_name: String,
     pub tls: bool,
-    pub tls_cert_path: Option<String>,
-    pub tls_key_path: Option<String>,
+    pub tls_acceptor: Option<Arc<TlsAcceptor>>,
     pub max_message_size: Option<usize>,
     pub max_connections: Option<usize>,
     /// in seconds
@@ -37,8 +42,7 @@ impl SmtpServer {
             port,
             helo_name: DEFAULT_HELO_NAME.to_string(),
             tls: false,
-            tls_cert_path: None,
-            tls_key_path: None,
+            tls_acceptor: None,
             max_message_size: Some(DEFAULT_MAX_MESSAGE_SIZE),
             max_connections: Some(DEFAULT_MAX_CONNECTIONS),
             read_timeout: Some(DEFAULT_READ_TIMEOUT),
@@ -61,19 +65,6 @@ impl SmtpServer {
                 eprintln!("Failed to accept connection: {}", e);
                 std::process::exit(1);
             });
-            let tls = match self.tls {
-                true => TlsMode::StartTls {
-                    cert_path: self.tls_cert_path.clone().unwrap_or_else(|| {
-                        eprintln!("TLS cert path is required when TLS is enabled");
-                        std::process::exit(1);
-                    }),
-                    key_path: self.tls_key_path.clone().unwrap_or_else(|| {
-                        eprintln!("TLS key path is required when TLS is enabled");
-                        std::process::exit(1);
-                    }),
-                },
-                false => TlsMode::None,
-            };
             let hello_name = self.helo_name.clone();
             let max_message_size = self
                 .max_message_size
@@ -83,12 +74,13 @@ impl SmtpServer {
             let write_timeout = self.write_timeout.clone().unwrap_or(DEFAULT_WRITE_TIMEOUT);
             let message_handler = self.message_handler.clone();
             let connections = self.connections.clone();
+            let tls_acceptor = self.tls_acceptor.clone();
             tokio::spawn(async move {
                 connections.fetch_add(1, Ordering::Relaxed);
                 let mut connection = SmtpConnection::new(
                     stream,
                     hello_name,
-                    tls,
+                    tls_acceptor,
                     max_message_size,
                     read_timeout,
                     write_timeout,
@@ -126,11 +118,35 @@ impl SmtpServer {
         self.write_timeout = Some(timeout);
         self
     }
-    pub fn with_start_tls(mut self, tls_cert_path: String, tls_key_path: String) -> Self {
+    pub fn with_start_tls(
+        mut self,
+        tls_cert_path: &str,
+        tls_key_path: &str,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         self.tls = true;
-        self.tls_cert_path = Some(tls_cert_path);
-        self.tls_key_path = Some(tls_key_path);
-        self
+
+        let cert_file = File::open(&tls_cert_path)?;
+        let mut cert_reader = BufReader::new(cert_file);
+        let certs = rustls_pemfile::certs(&mut cert_reader)
+            .map_err(|_| "Failed to read TLS certificate".to_string())?
+            .into_iter()
+            .map(rustls::Certificate)
+            .collect();
+        let key_file = File::open(&tls_key_path)?;
+        let mut key_reader = BufReader::new(key_file);
+        let keys = rustls_pemfile::pkcs8_private_keys(&mut key_reader)
+            .map_err(|_| "Failed to read TLS private key".to_string())?;
+        if keys.is_empty() {
+            return Err("No TLS private keys found".into());
+        }
+        let key = PrivateKey(keys[0].clone());
+        let config = rustls::ServerConfig::builder()
+            .with_safe_defaults()
+            .with_no_client_auth()
+            .with_single_cert(certs, key)
+            .map_err(|e| format!("Failed to create TLS config: {}", e))?;
+        self.tls_acceptor = Some(Arc::new(TlsAcceptor::from(Arc::new(config))));
+        Ok(self)
     }
     pub fn address(&self) -> String {
         format!("{}:{}", self.host, self.port)

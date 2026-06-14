@@ -3,19 +3,13 @@ use std::sync::Arc;
 use meowlman_address::Mailbox;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
-use crate::{envelope::SmtpEnvelope, message_handler::MessageHandler};
-
-pub enum TlsMode {
-    None,
-    StartTls { cert_path: String, key_path: String },
-}
-
+use crate::{envelope::SmtpEnvelope, message_handler::MessageHandler, tls::SmtpStream};
 pub struct SmtpConnection {
-    stream: BufReader<tokio::net::TcpStream>,
+    stream: SmtpStream,
     /// The HELO/EHLO name provided by the server. This is used in the initial greeting and in
     /// responses to the HELO/EHLO command.
     helo_name: String,
-    tls: TlsMode,
+    tls_acceptor: Option<Arc<tokio_rustls::TlsAcceptor>>,
     max_message_size: usize,
     read_timeout: u64,
     write_timeout: u64,
@@ -42,14 +36,14 @@ impl SmtpConnection {
     pub fn new(
         stream: tokio::net::TcpStream,
         helo_name: String,
-        tls: TlsMode,
+        tls_acceptor: Option<Arc<tokio_rustls::TlsAcceptor>>,
         max_message_size: usize,
         read_timeout: u64,
         write_timeout: u64,
         message_handler: Arc<Option<Box<dyn MessageHandler>>>,
     ) -> Self {
         SmtpConnection {
-            stream: BufReader::new(stream),
+            stream: SmtpStream::Plain(BufReader::new(stream)),
             helo_name,
             max_message_size,
             read_timeout,
@@ -63,14 +57,14 @@ impl SmtpConnection {
             helo_seen: false,
             mail_seen: false,
             rcpt_seen: false,
-            tls,
+            tls_acceptor,
         }
     }
 
     pub async fn handle(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.write_response(220, &format!("{} SMTP Service Ready", self.helo_name))
             .await?;
-        self.ip = Some(self.stream.get_ref().peer_addr()?.ip().to_string());
+        // self.ip = Some(self.stream.get_ref().peer_addr()?.ip().to_string());
         loop {
             let line: String = self.read_line().await?;
             if line.is_empty() {
@@ -84,6 +78,7 @@ impl SmtpConnection {
                 "RCPT" => self.handle_rcpt(&line).await?,
                 "DATA" => self.handle_data().await?,
                 "RSET" => self.handle_reset().await?,
+                "STARTTLS" => self.handle_starttls().await?,
                 "QUIT" => {
                     self.write_response(221, "Bye").await?;
                     break;
@@ -91,6 +86,33 @@ impl SmtpConnection {
                 _ => self.write_response(502, "Command not implemented").await?,
             }
         }
+        Ok(())
+    }
+
+    async fn handle_starttls(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let acceptor = match &self.tls_acceptor {
+            Some(a) => Arc::clone(a),
+            None => {
+                self.write_response(502, "Command not implemented").await?;
+                return Ok(());
+            }
+        };
+
+        self.write_response(220, "Ready to start TLS").await?;
+
+        let plain_stream = match std::mem::replace(&mut self.stream, SmtpStream::Placeholder) {
+            SmtpStream::Plain(reader) => reader.into_inner(),
+            SmtpStream::Tls(_) => {
+                self.write_response(503, "TLS already active").await?;
+                return Ok(());
+            }
+            SmtpStream::Placeholder => unreachable!(),
+        };
+
+        let tls_stream = acceptor.accept(plain_stream).await?;
+
+        self.stream = SmtpStream::Tls(BufReader::new(tls_stream));
+        self.handle_reset().await?;
         Ok(())
     }
 
@@ -124,6 +146,11 @@ impl SmtpConnection {
                 "SIZE 10485760",
                 "8BITMIME",
                 "PIPELINING",
+                if self.tls_acceptor.is_some() {
+                    "STARTTLS"
+                } else {
+                    ""
+                },
             ],
         )
         .await?;
@@ -236,6 +263,7 @@ impl SmtpConnection {
         self.write_response(250, "OK").await?;
         Ok(())
     }
+
     async fn write_response(
         &mut self,
         code: u16,

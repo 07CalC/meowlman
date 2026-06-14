@@ -12,6 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = meowlman_smtp::SmtpServer::new("0.0.0.0".to_string(), 1025)
         .with_message_handler(Box::new(MessageHandler))
         .with_helo_name("my-smtp-server".to_string());
+    // .with_start_tls("./cert.pem", "./key.pem")?;
 
     if let Err(e) = server.serve().await {
         eprintln!("SMTP server error: {}", e);

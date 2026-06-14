@@ -4,6 +4,7 @@ mod envelope;
 mod error;
 mod message_handler;
 mod server;
+mod tls;
 
 pub use client::{Response, SmtpClient};
 pub use envelope::SmtpEnvelope;
