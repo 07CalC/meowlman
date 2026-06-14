@@ -7,3 +7,4 @@ edition = "2024"
 meowlman-address = { path = "../meowlman-address" }
 meowlman-smtp = { path = "../meowlman-smtp" }
 meowlman-message = { path = "../meowlman-message" }
+tokio = { version = "1.0",features = ["full"] }
