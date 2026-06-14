@@ -1,13 +1,12 @@
 use meowlman_address::Mailbox;
 mod attachments;
+mod deserialise;
 mod header;
 mod mime;
 
 mod serialise;
-
-pub use serialise::MessageFormatter;
-
 pub use crate::attachments::Attachment;
+pub use serialise::MessageFormatter;
 
 /// ref: https://datatracker.ietf.org/doc/html/rfc5322#section-3.6
 //  +----------------+--------+------------+----------------------------+

@@ -1,20 +1,21 @@
-use std::{
-    io::{BufRead, Write},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use meowlman_address::Mailbox;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 use crate::{envelope::SmtpEnvelope, message_handler::MessageHandler};
 
+pub enum TlsMode {
+    None,
+    StartTls { cert_path: String, key_path: String },
+}
+
 pub struct SmtpConnection {
     stream: BufReader<tokio::net::TcpStream>,
     /// The HELO/EHLO name provided by the server. This is used in the initial greeting and in
     /// responses to the HELO/EHLO command.
     helo_name: String,
-    tls: bool,
-    tls_cert: Option<String>,
+    tls: TlsMode,
     max_message_size: usize,
     read_timeout: u64,
     write_timeout: u64,
@@ -41,8 +42,7 @@ impl SmtpConnection {
     pub fn new(
         stream: tokio::net::TcpStream,
         helo_name: String,
-        tls: bool,
-        tls_cert: Option<String>,
+        tls: TlsMode,
         max_message_size: usize,
         read_timeout: u64,
         write_timeout: u64,
@@ -51,8 +51,6 @@ impl SmtpConnection {
         SmtpConnection {
             stream: BufReader::new(stream),
             helo_name,
-            tls,
-            tls_cert,
             max_message_size,
             read_timeout,
             write_timeout,
@@ -65,6 +63,7 @@ impl SmtpConnection {
             helo_seen: false,
             mail_seen: false,
             rcpt_seen: false,
+            tls,
         }
     }
 

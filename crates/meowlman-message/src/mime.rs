@@ -13,6 +13,7 @@ pub enum MimeNode {
 pub enum MultipartKind {
     Mixed,
     Alternative,
+    #[allow(dead_code)]
     Related,
 }
 
@@ -27,21 +28,17 @@ pub struct MimePart {
 
 #[derive(Debug)]
 pub enum Encoding {
+    #[allow(dead_code)]
     SevenBit,
+    #[allow(dead_code)]
     EightBit,
+    #[allow(dead_code)]
     Binary,
     Base64,
     QuotedPrintable,
 }
 
 impl MimeNode {
-    pub fn is_multipart(&self) -> bool {
-        matches!(self, MimeNode::Multipart { .. })
-    }
-    pub fn is_part(&self) -> bool {
-        matches!(self, MimeNode::Part(_))
-    }
-
     pub fn build(&self) -> String {
         match self {
             MimeNode::Part(part) => {

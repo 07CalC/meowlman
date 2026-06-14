@@ -1,7 +1,7 @@
 use crate::{
     Message,
     header::HeaderWriter,
-    mime::{Encoding, MimeNode, MimePart, MultipartKind},
+    mime::{MimeNode, MimePart, MultipartKind},
 };
 
 pub struct MessageFormatter {}

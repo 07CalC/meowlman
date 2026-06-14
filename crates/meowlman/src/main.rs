@@ -9,27 +9,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .body_text("hi")
         .body_html("<h1>hi</h1>");
 
-    tokio::spawn(async {
-        let mut server = meowlman_smtp::SmtpServer::new("0.0.0.0".to_string(), 1025)
-            .with_message_handler(Box::new(MessageHandler))
-            .with_helo_name("my-smtp-server".to_string());
+    let mut server = meowlman_smtp::SmtpServer::new("0.0.0.0".to_string(), 1025)
+        .with_message_handler(Box::new(MessageHandler))
+        .with_helo_name("my-smtp-server".to_string());
 
-        if let Err(e) = server.serve().await {
-            eprintln!("SMTP server error: {}", e);
-        }
-    });
-
-    let mut client = meowlman_smtp::SmtpClient::connect("localhost:1025").unwrap_or_else(|e| {
-        eprintln!("Failed to connect to SMTP server: {}", e);
-        std::process::exit(1);
-    });
-    client
-        .send(
-            &"hello@vinm.me".parse().unwrap(),
-            &vec!["maheshwarivinayak90@gmail.com".parse().unwrap()],
-            &message,
-        )
-        .unwrap();
+    if let Err(e) = server.serve().await {
+        eprintln!("SMTP server error: {}", e);
+    }
 
     Ok(())
 }

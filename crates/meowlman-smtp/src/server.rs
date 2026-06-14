@@ -1,6 +1,12 @@
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 
-use crate::{conn::SmtpConnection, message_handler::MessageHandler};
+use crate::{
+    conn::{SmtpConnection, TlsMode},
+    message_handler::MessageHandler,
+};
 
 const DEFAULT_HELO_NAME: &str = "meowlman-smtp";
 const DEFAULT_MAX_MESSAGE_SIZE: usize = 10 * 1024 * 1024;
@@ -12,15 +18,16 @@ pub struct SmtpServer {
     pub port: u16,
     pub helo_name: String,
     pub tls: bool,
-    pub tls_cert: Option<String>,
+    pub tls_cert_path: Option<String>,
+    pub tls_key_path: Option<String>,
     pub max_message_size: Option<usize>,
     pub max_connections: Option<usize>,
     /// in seconds
     pub read_timeout: Option<u64>,
     /// in seconds
     pub write_timeout: Option<u64>,
-    connections: Vec<tokio::task::JoinHandle<()>>,
     message_handler: Arc<Option<Box<dyn MessageHandler>>>,
+    connections: Arc<AtomicUsize>,
 }
 
 impl SmtpServer {
@@ -30,13 +37,14 @@ impl SmtpServer {
             port,
             helo_name: DEFAULT_HELO_NAME.to_string(),
             tls: false,
-            tls_cert: None,
+            tls_cert_path: None,
+            tls_key_path: None,
             max_message_size: Some(DEFAULT_MAX_MESSAGE_SIZE),
             max_connections: Some(DEFAULT_MAX_CONNECTIONS),
             read_timeout: Some(DEFAULT_READ_TIMEOUT),
             write_timeout: Some(DEFAULT_WRITE_TIMEOUT),
             message_handler: Arc::new(None),
-            connections: Vec::new(),
+            connections: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -53,17 +61,44 @@ impl SmtpServer {
                 eprintln!("Failed to accept connection: {}", e);
                 std::process::exit(1);
             });
-            let mut connection = SmtpConnection::new(
-                stream,
-                self.helo_name.clone(),
-                self.tls,
-                self.tls_cert.clone(),
-                self.max_message_size.unwrap_or(DEFAULT_MAX_MESSAGE_SIZE),
-                self.read_timeout.unwrap_or(DEFAULT_READ_TIMEOUT),
-                self.write_timeout.unwrap_or(DEFAULT_WRITE_TIMEOUT),
-                self.message_handler.clone(),
-            );
-            connection.handle().await;
+            let tls = match self.tls {
+                true => TlsMode::StartTls {
+                    cert_path: self.tls_cert_path.clone().unwrap_or_else(|| {
+                        eprintln!("TLS cert path is required when TLS is enabled");
+                        std::process::exit(1);
+                    }),
+                    key_path: self.tls_key_path.clone().unwrap_or_else(|| {
+                        eprintln!("TLS key path is required when TLS is enabled");
+                        std::process::exit(1);
+                    }),
+                },
+                false => TlsMode::None,
+            };
+            let hello_name = self.helo_name.clone();
+            let max_message_size = self
+                .max_message_size
+                .clone()
+                .unwrap_or(DEFAULT_MAX_MESSAGE_SIZE);
+            let read_timeout = self.read_timeout.clone().unwrap_or(DEFAULT_READ_TIMEOUT);
+            let write_timeout = self.write_timeout.clone().unwrap_or(DEFAULT_WRITE_TIMEOUT);
+            let message_handler = self.message_handler.clone();
+            let connections = self.connections.clone();
+            tokio::spawn(async move {
+                connections.fetch_add(1, Ordering::Relaxed);
+                let mut connection = SmtpConnection::new(
+                    stream,
+                    hello_name,
+                    tls,
+                    max_message_size,
+                    read_timeout,
+                    write_timeout,
+                    message_handler,
+                );
+                if let Err(e) = connection.handle().await {
+                    eprintln!("Connection error: {}", e);
+                }
+                connections.fetch_sub(1, Ordering::Relaxed);
+            });
         }
     }
 
@@ -91,9 +126,10 @@ impl SmtpServer {
         self.write_timeout = Some(timeout);
         self
     }
-    pub fn with_tls(mut self, tls: bool, tls_cert: String) -> Self {
-        self.tls = tls;
-        self.tls_cert = Some(tls_cert);
+    pub fn with_start_tls(mut self, tls_cert_path: String, tls_key_path: String) -> Self {
+        self.tls = true;
+        self.tls_cert_path = Some(tls_cert_path);
+        self.tls_key_path = Some(tls_key_path);
         self
     }
     pub fn address(&self) -> String {
