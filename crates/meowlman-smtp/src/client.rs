@@ -107,14 +107,14 @@ impl SmtpClient {
     }
 
     /// ref: https://datatracker.ietf.org/doc/html/rfc5321#section-4.1.1.2
-    pub fn mail_from(&mut self, mb: Mailbox) -> Result<Response, SmtpClientError> {
+    pub fn mail_from(&mut self, mb: &Mailbox) -> Result<Response, SmtpClientError> {
         let resp = self.command(&format!("MAIL FROM:<{}>", mb.address()))?;
         resp.check_2xx()?;
         Ok(resp)
     }
 
     /// ref: https://datatracker.ietf.org/doc/html/rfc5321#section-4.1.1.3
-    pub fn rcpt_to(&mut self, mb: Mailbox) -> Result<Response, SmtpClientError> {
+    pub fn rcpt_to(&mut self, mb: &Mailbox) -> Result<Response, SmtpClientError> {
         let resp = self.command(&format!("RCPT TO:<{}>", mb.address()))?;
         resp.check_any(&[250, 251])?;
         Ok(resp)
@@ -135,8 +135,22 @@ impl SmtpClient {
         Ok(resp)
     }
 
-    pub fn send(&mut self, msg: &Message) -> Result<Response, SmtpClientError> {
+    pub fn msg(&mut self, msg: &Message) -> Result<Response, SmtpClientError> {
         let resp = self.data_raw(&msg.build())?;
+        Ok(resp)
+    }
+
+    pub fn send(
+        &mut self,
+        from: &Mailbox,
+        to: &[Mailbox],
+        msg: &Message,
+    ) -> Result<Response, SmtpClientError> {
+        self.mail_from(from)?;
+        for rcpt in to {
+            self.rcpt_to(rcpt)?;
+        }
+        let resp = self.msg(msg)?;
         Ok(resp)
     }
 
