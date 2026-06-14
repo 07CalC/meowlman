@@ -160,7 +160,6 @@ impl SmtpConnection {
                 self.write_response(501, "Invalid email address").await?;
             }
         }
-        self.write_response(250, "OK").await?;
         Ok(())
     }
 

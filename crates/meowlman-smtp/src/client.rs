@@ -146,6 +146,7 @@ impl SmtpClient {
         to: &[Mailbox],
         msg: &Message,
     ) -> Result<Response, SmtpClientError> {
+        self.helo("localhost")?;
         self.mail_from(from)?;
         for rcpt in to {
             self.rcpt_to(rcpt)?;
