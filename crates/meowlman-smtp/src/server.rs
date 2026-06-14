@@ -25,6 +25,7 @@ pub struct SmtpServer {
     pub helo_name: String,
     pub tls: bool,
     pub tls_acceptor: Option<Arc<TlsAcceptor>>,
+    /// in bytes
     pub max_message_size: Option<usize>,
     pub max_connections: Option<usize>,
     /// in seconds

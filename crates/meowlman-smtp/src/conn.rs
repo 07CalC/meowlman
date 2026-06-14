@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use meowlman_address::Mailbox;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::BufReader;
 
 use crate::{envelope::SmtpEnvelope, message_handler::MessageHandler, tls::SmtpStream};
 pub struct SmtpConnection {
@@ -144,11 +144,13 @@ impl SmtpConnection {
         }
         self.smtp_helo = Some(parts[1].to_string());
         self.helo_seen = true;
+        let size_cap = format!("SIZE {}", self.max_message_size);
         self.write_multiline_response(
             250,
             &[
                 &format!("Hello {}", parts[1]),
-                "SIZE 10485760",
+                &size_cap,
+                "SMTPUTF8",
                 "8BITMIME",
                 "PIPELINING",
                 if self.tls_acceptor.is_some() {
@@ -234,8 +236,16 @@ impl SmtpConnection {
         self.write_response(354, "End data with <CR><LF>.<CR><LF>")
             .await?;
         let mut data = Vec::new();
+        let mut size = 0usize;
         loop {
             let line = self.read_line().await?;
+            size += line.len() + 2; // +2 for CRLF
+            if size > self.max_message_size {
+                self.write_response(552, "Message size exceeds fixed maximum message size")
+                    .await?;
+                self.handle_reset().await?;
+                return Ok(());
+            }
             if line == "." {
                 break;
             }
@@ -277,6 +287,7 @@ impl SmtpConnection {
         Ok(())
     }
 
+    #[allow(dead_code)]
     async fn write_enhanced_response(
         &mut self,
         code: u16,
@@ -301,6 +312,7 @@ impl SmtpConnection {
         Ok(())
     }
 
+    #[allow(dead_code)]
     async fn write_multiline_enhanced_response(
         &mut self,
         code: u16,
