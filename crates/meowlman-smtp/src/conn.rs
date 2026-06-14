@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use meowlman_address::Mailbox;
-use tokio::io::BufReader;
+use tokio::{io::BufReader, time::timeout};
 
 use crate::{envelope::SmtpEnvelope, message_handler::MessageHandler, tls::SmtpStream};
 pub struct SmtpConnection {
@@ -283,7 +283,11 @@ impl SmtpConnection {
         msg: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let response = format!("{} {}\r\n", code, msg);
-        self.stream.write_all(response.as_bytes()).await?;
+        timeout(
+            Duration::from_secs(self.write_timeout),
+            self.stream.write_all(response.as_bytes()),
+        )
+        .await??;
         Ok(())
     }
 
@@ -329,7 +333,11 @@ impl SmtpConnection {
 
     async fn read_line(&mut self) -> Result<String, Box<dyn std::error::Error>> {
         let mut buffer = String::new();
-        self.stream.read_line(&mut buffer).await?;
+        timeout(
+            Duration::from_secs(self.read_timeout),
+            self.stream.read_line(&mut buffer),
+        )
+        .await??;
         Ok(buffer.trim_end().to_string())
     }
 }
